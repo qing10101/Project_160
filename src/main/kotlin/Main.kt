@@ -78,6 +78,7 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
                 .fillMaxSize()
                 .background(Color(0xFF121212)),
             color = Color.White.copy(alpha = 0.9f)
+
         ) {
             Image(
                 painter = panelBackgroundImage,
