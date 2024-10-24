@@ -21,6 +21,7 @@ dependencies {
     // (in a separate module for demo project and in testMain).
     // With compose.desktop.common you will also lose @Preview functionality
     implementation(compose.desktop.currentOs)
+    implementation("org.xerial:sqlite-jdbc:3.34.0") // SQLite JDBC driver
 }
 
 compose.desktop {
