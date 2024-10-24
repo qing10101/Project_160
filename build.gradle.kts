@@ -1,8 +1,8 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    kotlin("jvm")
-    id("org.jetbrains.compose")
+    kotlin("jvm") version "1.8.0"
+    id("org.jetbrains.compose") version "1.5.0"
 }
 
 
@@ -32,6 +32,19 @@ compose.desktop {
             packageName = "Project_160"
             packageVersion = "1.0.0"
         }
+    }
+}
+
+// Set both Kotlin and Java to use the same JVM toolchain
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(8)) // Use Java 17 (or Java 11 if preferred)
+    }
+}
+
+kotlin {
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(8)) // Align Kotlin JVM target with Java toolchain
     }
 }
 
