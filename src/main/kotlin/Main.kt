@@ -216,7 +216,7 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color.Gray,
+                            unfocusedBorderColor = Color(150,0,255),
                             cursorColor = Color.White
                         ),
                         modifier = Modifier.fillMaxWidth()
@@ -233,7 +233,7 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color.Gray,
+                            unfocusedBorderColor = Color(150,0,255),
                             cursorColor = Color.White
                         ),
                         modifier = Modifier.fillMaxWidth()
