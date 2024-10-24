@@ -68,6 +68,7 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    val panelBackgroundImage: Painter = painterResource("create_account.png")
 
     val connection = connectToDatabase()
 
@@ -78,6 +79,12 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
                 .background(Color(0xFF121212)),
             color = Color.White.copy(alpha = 0.9f)
         ) {
+            Image(
+                painter = panelBackgroundImage,
+                contentDescription = null,
+                contentScale = ContentScale.Crop, // Scales to fill the panel area
+                modifier = Modifier.fillMaxSize() // Fills the panel area
+            )
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -166,7 +173,7 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
-    val panelBackgroundImage: Painter = painterResource("img.png")
+    val panelBackgroundImage: Painter = painterResource("login.png")
     val connection = connectToDatabase()  // Establish connection when the composable is created
     connection?.let {
         createUsersTable(it) // Ensure the users table exists
