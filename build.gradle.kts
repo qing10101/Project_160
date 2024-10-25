@@ -3,12 +3,20 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
     kotlin("jvm") version "1.8.0"
     id("org.jetbrains.compose") version "1.5.0"
+    id("com.github.johnrengelman.shadow") version "7.1.0" // Add Shadow plugin
+
 }
 
 
 group = "com.company"
 version = "1.0-SNAPSHOT"
 
+
+tasks.shadowJar {
+    archiveBaseName.set("Project_160")
+    archiveVersion.set("1.0")
+    archiveClassifier.set("")
+}
 repositories {
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
@@ -38,14 +46,17 @@ compose.desktop {
 
 // Set both Kotlin and Java to use the same JVM toolchain
 java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(8)) // Use Java 17 (or Java 11 if preferred)
-    }
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+//    toolchain {
+//        languageVersion.set(JavaLanguageVersion.of(17))
+//        implementation.set(JvmImplementation.J9) // optional for ARM compatibility
+//    }
 }
 
 kotlin {
     jvmToolchain {
-        languageVersion.set(JavaLanguageVersion.of(8)) // Align Kotlin JVM target with Java toolchain
+        languageVersion.set(JavaLanguageVersion.of(17)) // Align Kotlin JVM target with Java toolchain
     }
 }
 
