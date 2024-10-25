@@ -1,3 +1,5 @@
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.*
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -14,6 +16,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.sql.*
 
+// Function to check if a username exists in the database
+fun isUsernameTaken(username: String): Boolean {
+    val connection = connectToDatabase()
+    val query = "SELECT COUNT(*) FROM users WHERE username = ?"
+    val preparedStatement = connection?.prepareStatement(query)
+    if (preparedStatement != null) {
+        preparedStatement.setString(1, username)
+    }
+    val resultSet: ResultSet? = preparedStatement?.executeQuery()
+    val count = resultSet?.getInt(1)
+    resultSet?.close()
+    preparedStatement?.close()
+    connection?.close()
+
+    // If count > 0, the username is taken
+    if (count != null) {
+        return count > 0
+    }
+    return false
+}
 fun verifyUser(connection: Connection, username: String, password: String): Boolean {
     val selectSQL = "SELECT * FROM users WHERE username = ? AND password = ?;"
     val preparedStatement = connection.prepareStatement(selectSQL)
@@ -26,13 +48,19 @@ fun verifyUser(connection: Connection, username: String, password: String): Bool
     return resultSet.next()
 }
 
-fun insertUser(connection: Connection, username: String, password: String) {
+fun insertUser(connection: Connection, username: String, password: String): Boolean {
+    // Check if the username already exists
+    if (isUsernameTaken(username)) {
+        println("Username is already taken")
+        return false
+    }
     val insertSQL = "INSERT INTO users (username, password) VALUES (?, ?);"
     val preparedStatement = connection.prepareStatement(insertSQL)
     preparedStatement.setString(1, username)
     preparedStatement.setString(2, password)
     preparedStatement.executeUpdate()
     println("User $username has been inserted.")
+    return true
 }
 
 // Function to create users table if it doesn't exist
@@ -145,9 +173,14 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
                     if (connection != null) {
                         if (password == confirmPassword) {
                             if (username.isNotEmpty() && password.isNotEmpty()) {
-                                insertUser(connection, username, password)
-                                message = "User created successfully!"
-                                onUserCreated()  // Navigate back to login
+                                val userCreated = insertUser(connection, username, password)
+                                if(!userCreated) {
+                                    message = "Username already taken."
+                                }else
+                                {
+                                    message = "User created successfully!"
+                                    onUserCreated()  // Navigate back to login
+                                }
                             } else {
                                 message = "Please fill out all fields."
                             }
@@ -346,12 +379,44 @@ fun StockTradingWindow() {
     }
 }
 
+@Composable
+fun App() {
+    var screenState by remember { mutableStateOf(ScreenState.Login) }
+    Crossfade(targetState = screenState,
+            animationSpec = tween(durationMillis = 2000,
+                easing = FastOutSlowInEasing  // Fast start, slow finish
+            )  // Set the duration in milliseconds (e.g., 2000ms = 2 seconds)
+    ) { state ->
+        when (state) {
+            ScreenState.Login -> LoginPanel(
+                onLoginSuccess = {
+                    // Move to the stock trading window (or another screen)
+                    screenState = ScreenState.StockTrading
+                },
+                onCreateAccount = {
+                    // Move to the registration screen
+                    screenState = ScreenState.Register
+                }
+            )
+            ScreenState.Register -> RegisterUserWindow(
+                onUserCreated = {
+                    // Return to the login screen
+                    screenState = ScreenState.Login
+                }
+            )
+            ScreenState.StockTrading -> StockTradingWindow()
+        }
+    }
+}
+
+// Enum to represent the different screens
+enum class ScreenState {
+    Login,
+    Register,
+    StockTrading
+}
 
 fun main() = application {
-    var showLoginWindow by remember { mutableStateOf(true) }
-    var showRegisterWindow by remember { mutableStateOf(false) }
-    var showStockTradingWindow by remember { mutableStateOf(false) }
-
     // Get screen dimensions and center window
     val screenWidth = java.awt.Toolkit.getDefaultToolkit().screenSize.width.dp
     val screenHeight = java.awt.Toolkit.getDefaultToolkit().screenSize.height.dp
@@ -363,49 +428,7 @@ fun main() = application {
         position = WindowPosition((screenWidth - windowWidth) / 2, (screenHeight - windowHeight) / 2),
         placement = WindowPlacement.Floating
     )
-
-    if (showLoginWindow) {
-        Window(
-            onCloseRequest = ::exitApplication,
-            title = "Login",
-            state = windowState
-        ) {
-            LoginPanel(
-                onLoginSuccess = {
-                    showLoginWindow = false
-                    showStockTradingWindow = true
-                },
-                onCreateAccount = {
-                    showLoginWindow = false
-                    showRegisterWindow = true
-                }
-            )
-        }
-    }
-
-    if (showRegisterWindow) {
-        Window(
-            onCloseRequest = ::exitApplication,
-            title = "Create Account",
-            state = windowState
-        ) {
-            RegisterUserWindow(
-                onUserCreated = {
-                    showRegisterWindow = false
-                    showLoginWindow = true
-                }
-            )
-        }
-    }
-
-    if (showStockTradingWindow) {
-        Window(
-            onCloseRequest = ::exitApplication,
-            title = "Stock Trading Simulator",
-            state = windowState
-        ) {
-            StockTradingWindow()
-        }
+    Window(state = windowState, onCloseRequest = ::exitApplication) {
+        App()
     }
 }
-
