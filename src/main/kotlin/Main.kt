@@ -16,6 +16,62 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.sql.*
 
+fun deleteUser(username: String): Boolean {
+    val connection = connectToDatabase()
+    connection?.autoCommit = false  // Start transaction
+
+    return try {
+        val query = "DELETE FROM users WHERE username = ?"
+        val statement = connection?.prepareStatement(query)
+        statement?.setString(1, username)
+        val rowsAffected = statement?.executeUpdate()
+
+        connection?.commit()  // Commit the transaction
+        statement?.close()
+        rowsAffected!! > 0  // Return true if the user was deleted
+    } catch (e: SQLException) {
+        connection?.rollback()  // Rollback in case of an error
+        println("Error deleting user: ${e.message}")
+        false
+    } finally {
+        connection?.close()
+    }
+}
+
+fun deleteUsersTable() {
+    val connection = connectToDatabase()
+    connection?.autoCommit = false  // Start transaction
+
+    try {
+        val query = "DROP TABLE IF EXISTS users"
+        val statement = connection?.createStatement()
+        statement?.executeUpdate(query)
+
+        connection?.commit()  // Commit the transaction
+    } catch (e: SQLException) {
+        connection?.rollback()  // Rollback in case of an error
+        println("Error deleting table: ${e.message}")
+    } finally {
+        connection?.close()
+    }
+}
+
+
+fun addRootUser(connection: Connection) {
+    if (!isUsernameTaken("root")) {
+        val insertQuery = "INSERT INTO users (username, password) VALUES (?, ?)"
+        val preparedStatement = connection.prepareStatement(insertQuery)
+        preparedStatement?.setString(1, "root")
+        preparedStatement?.setString(2, "wangzhirong")  // Replace with a strong password
+        preparedStatement?.executeUpdate()
+        preparedStatement?.close()
+        println("Root user created successfully.")
+    } else {
+        println("Root user already exists.")
+    }
+}
+
+
 // Function to check if a username exists in the database
 fun isUsernameTaken(username: String): Boolean {
     val connection = connectToDatabase()
@@ -177,6 +233,7 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
                                 }else
                                 {
                                     message = "User created successfully!"
+                                    connection.close()
                                     onUserCreated()  // Navigate back to login
                                 }
                             } else {
@@ -201,7 +258,7 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
 // Define the login window
 @Composable
 @Preview
-fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
+fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminLogin: () -> Unit){
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
@@ -209,6 +266,9 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
     val connection = connectToDatabase()  // Establish connection when the composable is created
     connection?.let {
         createUsersTable(it) // Ensure the users table exists
+    }
+    if (connection != null) {
+        addRootUser(connection)
     }
     MaterialTheme {
         Surface(
@@ -276,7 +336,17 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
                     Button(onClick = {
                         if (connection != null) {
                             if (verifyUser(connection, username, password)) {
-                                onLoginSuccess()  // Login is successful
+                                if(username.equals("root"))
+                                {
+                                    connection.close()
+                                    onAdminLogin()  // Admin login is successful
+                                }
+                                else
+                                {
+                                    connection.close()
+                                    onLoginSuccess()  // Login is successful
+                                }
+
                             } else {
                                 message = "Invalid credentials, try again."
                             }
@@ -288,7 +358,9 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
 
                     // Create new account button
-                    Button(onClick = { onCreateAccount() }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { onCreateAccount()
+                        connection?.close() // Close database connection when navigating away from the create account window
+                                     }, modifier = Modifier.fillMaxWidth()) {
                         Text("Create New Account")
                     }
 
@@ -378,6 +450,82 @@ fun StockTradingWindow() {
 }
 
 @Composable
+fun UserManagementPanel() {
+    var usernameToDelete by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    val panelBackgroundImage: Painter = painterResource("manage.png")
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Cyan), // Light blue background color
+        color = Color.White.copy(alpha = 0.8f), // Semi-transparent background for the login form、
+    ) {
+        Image(
+            painter = panelBackgroundImage,
+            contentDescription = null,
+            contentScale = ContentScale.Crop, // Scales to fill the panel area
+            modifier = Modifier.fillMaxSize() // Fills the panel area
+        )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center  // Center everything horizontally and vertically
+        )
+        {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                Text("User Management Panel", style = MaterialTheme.typography.h5, color = Color.White)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Delete Specific User
+                Text("Delete a specific user by username:", color = Color.White )
+                OutlinedTextField(
+                    value = usernameToDelete,
+                    onValueChange = { usernameToDelete = it },
+                    label = { Text("Username") }
+                )
+
+                Button(
+                    onClick = {
+                        if (deleteUser(usernameToDelete)) {
+                            message = "User '$usernameToDelete' deleted successfully."
+                        } else {
+                            message = "User '$usernameToDelete' not found."
+                        }
+                        usernameToDelete = ""
+                    },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("Delete User")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Delete Entire Users Table
+                Button(
+                    onClick = {
+                        deleteUsersTable()
+                        message = "All users deleted successfully."
+                    },
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Color.Red)
+                ) {
+                    Text("Delete All Users", color = Color.White)
+                }
+
+                // Display a message
+                if (message.isNotEmpty()) {
+                    Text(message, color = Color.Red, modifier = Modifier.padding(top = 16.dp))
+                }
+            }
+        }
+    }
+
+
+
+}
+
+
+
+@Composable
 fun App() {
     var screenState by remember { mutableStateOf(ScreenState.Login) }
     Crossfade(targetState = screenState,
@@ -394,6 +542,10 @@ fun App() {
                 onCreateAccount = {
                     // Move to the registration screen
                     screenState = ScreenState.Register
+                },
+                onAdminLogin = {
+                    // Move to the admin panel (or another screen)
+                    screenState = ScreenState.AdminPanel
                 }
             )
             ScreenState.Register -> RegisterUserWindow(
@@ -403,6 +555,7 @@ fun App() {
                 }
             )
             ScreenState.StockTrading -> StockTradingWindow()
+            ScreenState.AdminPanel -> UserManagementPanel()
         }
     }
 }
@@ -411,7 +564,8 @@ fun App() {
 enum class ScreenState {
     Login,
     Register,
-    StockTrading
+    StockTrading,
+    AdminPanel
 }
 
 fun main() = application {
