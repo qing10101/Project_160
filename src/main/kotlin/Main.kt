@@ -388,12 +388,19 @@ fun StockTradingWindow() {
     var stockSymbol by remember { mutableStateOf("") }
     var portfolio by remember { mutableStateOf(mutableListOf<String>()) }
     var message by remember { mutableStateOf("") }
-
+    var amount by remember { mutableStateOf("") }
+    val panelBackgroundImage: Painter = painterResource("stock.png")
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = Color(0xFF101010)
         ) {
+            Image(
+                painter = panelBackgroundImage,
+                contentDescription = null,
+                contentScale = ContentScale.Crop, // Scales to fill the panel area
+                modifier = Modifier.fillMaxSize() // Fills the panel area
+            )
             Box(modifier = Modifier.fillMaxSize()) {
                 // Log Out button at the top right
                 Button(
@@ -423,11 +430,25 @@ fun StockTradingWindow() {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color.Gray,
+                            unfocusedBorderColor = Color(150,0,255),
                             cursorColor = Color.White
                         )
                     )
 
+                    Spacer(Modifier.height(16.dp))
+
+                    // Amount Input
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = { amount = it },
+                        label = { Text("Enter Amount in Dollars", color = Color.White) },
+                        textStyle = TextStyle(color = Color.White),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = Color.White,
+                            unfocusedBorderColor = Color(150,0,255),
+                            cursorColor = Color.White
+                        )
+                    )
                     Spacer(Modifier.height(16.dp))
 
                     Row {
