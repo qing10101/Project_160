@@ -394,62 +394,74 @@ fun StockTradingWindow() {
             modifier = Modifier.fillMaxSize(),
             color = Color(0xFF101010)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Stock Trading Simulator", color = Color.White, style = MaterialTheme.typography.h5)
-
-                Spacer(Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = stockSymbol,
-                    onValueChange = { stockSymbol = it },
-                    label = { Text("Enter Stock Symbol", color = Color.White) },
-                    textStyle = TextStyle(color = Color.White),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.Gray,
-                        cursorColor = Color.White
-                    )
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                Row {
-                    Button(onClick = {
-                        if (stockSymbol.isNotEmpty()) {
-                            portfolio.add("Bought: $stockSymbol")
-                            message = "Bought $stockSymbol"
-                        }
-                    }) {
-                        Text("Buy")
-                    }
-
-                    Spacer(Modifier.width(16.dp))
-
-                    Button(onClick = {
-                        if (stockSymbol.isNotEmpty()) {
-                            portfolio.add("Sold: $stockSymbol")
-                            message = "Sold $stockSymbol"
-                        }
-                    }) {
-                        Text("Sell")
-                    }
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Log Out button at the top right
+                Button(
+                    onClick = { exitProcess(0) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Text("Log Out")
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Stock Trading Simulator", color = Color.White, style = MaterialTheme.typography.h5)
 
-                Text(message, color = Color.White)
+                    Spacer(Modifier.height(16.dp))
 
-                Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = stockSymbol,
+                        onValueChange = { stockSymbol = it },
+                        label = { Text("Enter Stock Symbol", color = Color.White) },
+                        textStyle = TextStyle(color = Color.White),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = Color.White,
+                            unfocusedBorderColor = Color.Gray,
+                            cursorColor = Color.White
+                        )
+                    )
 
-                Text("Portfolio:", color = Color.White)
-                portfolio.forEach {
-                    Text(it, color = Color.LightGray)
+                    Spacer(Modifier.height(16.dp))
+
+                    Row {
+                        Button(onClick = {
+                            if (stockSymbol.isNotEmpty()) {
+                                portfolio.add("Bought: $stockSymbol")
+                                message = "Bought $stockSymbol"
+                            }
+                        }) {
+                            Text("Buy")
+                        }
+
+                        Spacer(Modifier.width(16.dp))
+
+                        Button(onClick = {
+                            if (stockSymbol.isNotEmpty()) {
+                                portfolio.add("Sold: $stockSymbol")
+                                message = "Sold $stockSymbol"
+                            }
+                        }) {
+                            Text("Sell")
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(message, color = Color.White)
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text("Portfolio:", color = Color.White)
+                    portfolio.forEach {
+                        Text(it, color = Color.LightGray)
+                    }
                 }
             }
         }
