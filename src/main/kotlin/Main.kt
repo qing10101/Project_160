@@ -21,9 +21,7 @@ fun isUsernameTaken(username: String): Boolean {
     val connection = connectToDatabase()
     val query = "SELECT COUNT(*) FROM users WHERE username = ?"
     val preparedStatement = connection?.prepareStatement(query)
-    if (preparedStatement != null) {
-        preparedStatement.setString(1, username)
-    }
+    preparedStatement?.setString(1, username)
     val resultSet: ResultSet? = preparedStatement?.executeQuery()
     val count = resultSet?.getInt(1)
     resultSet?.close()
