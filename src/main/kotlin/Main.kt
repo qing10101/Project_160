@@ -15,6 +15,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.sql.*
+import kotlin.system.exitProcess
 
 fun deleteUser(username: String): Boolean {
     val connection = connectToDatabase()
@@ -270,6 +271,12 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminL
     if (connection != null) {
         addRootUser(connection)
     }
+    // Clear fields when the panel is entered
+    LaunchedEffect(Unit) {
+        username = ""
+        password = ""
+        message = ""
+    }
     MaterialTheme {
         Surface(
             modifier = Modifier
@@ -450,7 +457,7 @@ fun StockTradingWindow() {
 }
 
 @Composable
-fun UserManagementPanel() {
+fun UserManagementPanel(onLogout: () -> Unit) {
     var usernameToDelete by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     val panelBackgroundImage: Painter = painterResource("manage.png")
@@ -471,7 +478,9 @@ fun UserManagementPanel() {
             contentAlignment = Alignment.Center  // Center everything horizontally and vertically
         )
         {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("User Management Panel", style = MaterialTheme.typography.h5, color = Color.White)
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -481,7 +490,13 @@ fun UserManagementPanel() {
                 OutlinedTextField(
                     value = usernameToDelete,
                     onValueChange = { usernameToDelete = it },
-                    label = { Text("Username") }
+                    label = { Text("Username", color = Color.White) },
+                    textStyle = TextStyle(color = Color.White),
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color(150,0,255),
+                        cursorColor = Color.White
+                    ),
                 )
 
                 Button(
@@ -510,10 +525,26 @@ fun UserManagementPanel() {
                 ) {
                     Text("Delete All Users", color = Color.White)
                 }
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Log out root
+                Button(
+                    onClick = {
+                        onLogout()
+                        message = "Root logged out successfully."
+                    }
+                ) {
+                    Text("Log Out", color = Color.White)
+                }
 
                 // Display a message
                 if (message.isNotEmpty()) {
-                    Text(message, color = Color.Red, modifier = Modifier.padding(top = 16.dp))
+                    if(!message.equals("Root logged out successfully.")) {
+                        Text(message, color = Color.Red, modifier = Modifier.padding(top = 16.dp))
+                    }
+                    else {
+                        Text(message, color = Color.White, modifier = Modifier.padding(top = 16.dp))
+                    }
                 }
             }
         }
@@ -528,6 +559,8 @@ fun UserManagementPanel() {
 @Composable
 fun App() {
     var screenState by remember { mutableStateOf(ScreenState.Login) }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     Crossfade(targetState = screenState,
             animationSpec = tween(durationMillis = 2000,
                 easing = FastOutSlowInEasing  // Fast start, slow finish
@@ -538,14 +571,20 @@ fun App() {
                 onLoginSuccess = {
                     // Move to the stock trading window (or another screen)
                     screenState = ScreenState.StockTrading
+                    username = "" // Reset username
+                    password = "" // Reset password
                 },
                 onCreateAccount = {
                     // Move to the registration screen
                     screenState = ScreenState.Register
+                    username = "" // Reset username
+                    password = "" // Reset password
                 },
                 onAdminLogin = {
                     // Move to the admin panel (or another screen)
                     screenState = ScreenState.AdminPanel
+                    username = "" // Reset username
+                    password = "" // Reset password
                 }
             )
             ScreenState.Register -> RegisterUserWindow(
@@ -555,7 +594,11 @@ fun App() {
                 }
             )
             ScreenState.StockTrading -> StockTradingWindow()
-            ScreenState.AdminPanel -> UserManagementPanel()
+            ScreenState.AdminPanel -> UserManagementPanel(
+                onLogout = {
+                    exitProcess(0)
+                }
+            )
         }
     }
 }
