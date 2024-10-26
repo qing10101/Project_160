@@ -4,6 +4,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -431,11 +433,12 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminL
 @Composable
 fun StockTradingWindow() {
     var stockSymbol by remember { mutableStateOf("") }
-    var portfolio by remember { mutableStateOf(mutableListOf<String>()) }
+    var portfolio by remember { mutableStateOf(mutableListOf<Map<String, String>>()) }
     var message by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     val panelBackgroundImage: Painter = painterResource("stock.png")
     val coroutineScope = rememberCoroutineScope()
+
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -444,9 +447,10 @@ fun StockTradingWindow() {
             Image(
                 painter = panelBackgroundImage,
                 contentDescription = null,
-                contentScale = ContentScale.Crop, // Scales to fill the panel area
-                modifier = Modifier.fillMaxSize() // Fills the panel area
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
+
             Box(modifier = Modifier.fillMaxSize()) {
                 // Log Out button at the top right
                 Button(
@@ -476,7 +480,7 @@ fun StockTradingWindow() {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color(150,0,255),
+                            unfocusedBorderColor = Color(150, 0, 255),
                             cursorColor = Color.White
                         )
                     )
@@ -491,10 +495,11 @@ fun StockTradingWindow() {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color(150,0,255),
+                            unfocusedBorderColor = Color(150, 0, 255),
                             cursorColor = Color.White
                         )
                     )
+
                     Spacer(Modifier.height(16.dp))
 
                     Row {
@@ -503,7 +508,14 @@ fun StockTradingWindow() {
                                 if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
                                     val stockResponse = getStockPrice(stockSymbol)
                                     val price = stockResponse.globalQuote.price
-                                    portfolio.add("Bought: $stockSymbol at $$price with $$amount")
+                                    portfolio.add(
+                                        mapOf(
+                                            "Type" to "Bought",
+                                            "Symbol" to stockSymbol,
+                                            "Price" to price.toString(),
+                                            "Amount" to amount
+                                        )
+                                    )
                                     message = "Bought $stockSymbol at $$price"
                                 } else {
                                     message = "Please enter a valid symbol and amount"
@@ -520,7 +532,14 @@ fun StockTradingWindow() {
                                 if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
                                     val stockResponse = getStockPrice(stockSymbol)
                                     val price = stockResponse.globalQuote.price
-                                    portfolio.add("Sold: $stockSymbol at $$price with $$amount")
+                                    portfolio.add(
+                                        mapOf(
+                                            "Type" to "Sold",
+                                            "Symbol" to stockSymbol,
+                                            "Price" to price.toString(),
+                                            "Amount" to amount
+                                        )
+                                    )
                                     message = "Sold $stockSymbol at $$price"
                                 } else {
                                     message = "Please enter a valid symbol and amount"
@@ -537,15 +556,40 @@ fun StockTradingWindow() {
 
                     Spacer(Modifier.height(16.dp))
 
-                    Text("Portfolio:", color = Color.White)
-                    portfolio.forEach {
-                        Text(it, color = Color.LightGray)
+                    // Portfolio Table Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.DarkGray)
+                            .padding(8.dp)
+                    ) {
+                        Text("Type", modifier = Modifier.weight(1f), color = Color.White)
+                        Text("Symbol", modifier = Modifier.weight(1f), color = Color.White)
+                        Text("Price", modifier = Modifier.weight(1f), color = Color.White)
+                        Text("Amount", modifier = Modifier.weight(1f), color = Color.White)
+                    }
+
+                    // Portfolio Table Content
+                    LazyColumn {
+                        items(portfolio) { entry ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                            ) {
+                                Text(entry["Type"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
+                                Text(entry["Symbol"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
+                                Text(entry["Price"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
+                                Text(entry["Amount"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 fun UserManagementPanel(onLogout: () -> Unit) {
