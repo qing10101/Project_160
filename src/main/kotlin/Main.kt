@@ -1,3 +1,4 @@
+import ApiClient.getStockPrice
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.desktop.ui.tooling.preview.Preview
@@ -16,6 +17,50 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.sql.*
 import kotlin.system.exitProcess
+
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+@Serializable
+data class StockPriceResponse(
+    @SerialName("Global Quote") val globalQuote: GlobalQuote
+)
+
+@Serializable
+data class GlobalQuote(
+    @SerialName("01. symbol") val symbol: String,
+    @SerialName("02. open") val open: String,
+    @SerialName("03. high") val high: String,
+    @SerialName("04. low") val low: String,
+    @SerialName("05. price") val price: String,
+    @SerialName("06. volume") val volume: String,
+    @SerialName("07. latest trading day") val latestTradingDay: String,
+    @SerialName("08. previous close") val previousClose: String,
+    @SerialName("09. change") val change: String,
+    @SerialName("10. change percent") val changePercent: String
+)
+object ApiClient {
+    val client = HttpClient {
+        install(ContentNegotiation) {
+            json(Json { ignoreUnknownKeys = true }) // Handle unknown JSON keys if any
+        }
+    }
+
+    suspend fun getStockPrice(symbol: String): StockPriceResponse {
+        var url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=$symbol&apikey=SMIXPOR20XFULGKL"
+        return client.get(url).body()
+    }
+}
+
 
 fun deleteUser(username: String): Boolean {
     val connection = connectToDatabase()
@@ -390,6 +435,7 @@ fun StockTradingWindow() {
     var message by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     val panelBackgroundImage: Painter = painterResource("stock.png")
+    val coroutineScope = rememberCoroutineScope()
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -453,9 +499,15 @@ fun StockTradingWindow() {
 
                     Row {
                         Button(onClick = {
-                            if (stockSymbol.isNotEmpty()) {
-                                portfolio.add("Bought: $stockSymbol")
-                                message = "Bought $stockSymbol"
+                            coroutineScope.launch {
+                                if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
+                                    val stockResponse = getStockPrice(stockSymbol)
+                                    val price = stockResponse.globalQuote.price
+                                    portfolio.add("Bought: $stockSymbol at $$price with $$amount")
+                                    message = "Bought $stockSymbol at $$price"
+                                } else {
+                                    message = "Please enter a valid symbol and amount"
+                                }
                             }
                         }) {
                             Text("Buy")
@@ -464,9 +516,15 @@ fun StockTradingWindow() {
                         Spacer(Modifier.width(16.dp))
 
                         Button(onClick = {
-                            if (stockSymbol.isNotEmpty()) {
-                                portfolio.add("Sold: $stockSymbol")
-                                message = "Sold $stockSymbol"
+                            coroutineScope.launch {
+                                if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
+                                    val stockResponse = getStockPrice(stockSymbol)
+                                    val price = stockResponse.globalQuote.price
+                                    portfolio.add("Sold: $stockSymbol at $$price with $$amount")
+                                    message = "Sold $stockSymbol at $$price"
+                                } else {
+                                    message = "Please enter a valid symbol and amount"
+                                }
                             }
                         }) {
                             Text("Sell")
@@ -656,7 +714,10 @@ fun main() = application {
         position = WindowPosition((screenWidth - windowWidth) / 2, (screenHeight - windowHeight) / 2),
         placement = WindowPlacement.Floating
     )
-    Window(state = windowState, onCloseRequest = ::exitApplication) {
+    Window(state = windowState,
+        onCloseRequest = ::exitApplication,
+        title = "Stock Trading Simulator" // Set your desired window title here
+    ) {
         App()
     }
 }
