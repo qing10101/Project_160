@@ -30,8 +30,40 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
 
+private var localUserName = "user"
+@Serializable
+data class PortfolioEntry(
+    val type: String,
+    val symbol: String,
+    val price: String,
+    val amount: String,
+    var heldAmount: Double  // Amount of stock currently held
+)
+
+@Serializable
+data class UserPortfolio(
+    val username: String,
+    val entries: List<PortfolioEntry>
+)
+fun loadPortfolio(username: String): MutableList<PortfolioEntry> {
+    val portfolioFile = File("portfolio_$username.json") // Use a unique filename for each user
+    return if (portfolioFile.exists()) {
+        val jsonString = portfolioFile.readText()
+        Json.decodeFromString<UserPortfolio>(jsonString).entries.toMutableList()
+    } else {
+        mutableListOf()
+    }
+}
+fun savePortfolio(username: String, portfolio: List<PortfolioEntry>) {
+    val portfolioFile = File("portfolio_$username.json") // Correctly use string interpolation
+    val userPortfolio = UserPortfolio(username, portfolio)
+    val jsonString = Json.encodeToString(userPortfolio)
+    portfolioFile.writeText(jsonString) // Save the updated portfolio to the file
+}
 @Serializable
 data class StockPriceResponse(
     @SerialName("Global Quote") val globalQuote: GlobalQuote
@@ -397,6 +429,7 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminL
                                 }
                                 else
                                 {
+                                    localUserName = username
                                     connection.close()
                                     onLoginSuccess()  // Login is successful
                                 }
@@ -433,7 +466,7 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminL
 @Composable
 fun StockTradingWindow() {
     var stockSymbol by remember { mutableStateOf("") }
-    var portfolio by remember { mutableStateOf(mutableListOf<Map<String, String>>()) }
+    var portfolio by remember { mutableStateOf(mutableListOf<PortfolioEntry>().apply { addAll(loadPortfolio(localUserName)) }) }
     var message by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     val panelBackgroundImage: Painter = painterResource("stock.png")
@@ -507,16 +540,37 @@ fun StockTradingWindow() {
                             coroutineScope.launch {
                                 if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
                                     val stockResponse = getStockPrice(stockSymbol)
-                                    val price = stockResponse.globalQuote.price
-                                    portfolio.add(
-                                        mapOf(
-                                            "Type" to "Bought",
-                                            "Symbol" to stockSymbol,
-                                            "Price" to price.toString(),
-                                            "Amount" to amount
-                                        )
-                                    )
-                                    message = "Bought $stockSymbol at $$price"
+                                    val price = stockResponse.globalQuote.price.toDoubleOrNull()
+
+                                    if (price != null) {
+                                        val amountToBuy = amount.toDoubleOrNull()
+                                        if (amountToBuy != null) {
+                                            // Check if the stock already exists in the portfolio
+                                            val existingEntry = portfolio.find { it.symbol == stockSymbol }
+
+                                            if (existingEntry != null) {
+                                                // Increase the held amount for the existing stock
+                                                existingEntry.heldAmount += amountToBuy
+                                            } else {
+                                                // Create a new entry in the portfolio
+                                                portfolio.add(
+                                                    PortfolioEntry(
+                                                        type = "Bought",
+                                                        symbol = stockSymbol,
+                                                        price = price.toString(),
+                                                        amount = amount,
+                                                        heldAmount = amountToBuy // Set initial held amount
+                                                    )
+                                                )
+                                            }
+                                            message = "Bought $stockSymbol at $$price"
+                                            savePortfolio(localUserName, portfolio) // Save portfolio
+                                        } else {
+                                            message = "Please enter a valid amount."
+                                        }
+                                    } else {
+                                        message = "Failed to fetch stock price."
+                                    }
                                 } else {
                                     message = "Please enter a valid symbol and amount"
                                 }
@@ -530,19 +584,45 @@ fun StockTradingWindow() {
                         Button(onClick = {
                             coroutineScope.launch {
                                 if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
-                                    val stockResponse = getStockPrice(stockSymbol)
-                                    val price = stockResponse.globalQuote.price
-                                    portfolio.add(
-                                        mapOf(
-                                            "Type" to "Sold",
-                                            "Symbol" to stockSymbol,
-                                            "Price" to price.toString(),
-                                            "Amount" to amount
-                                        )
-                                    )
-                                    message = "Sold $stockSymbol at $$price"
+                                    val amountToSell = amount.toDoubleOrNull()
+                                    if (amountToSell != null) {
+                                        val existingEntry = portfolio.find { it.symbol == stockSymbol }
+                                        val totalHeld = existingEntry?.heldAmount ?: 0.0
+
+                                        if (totalHeld > 0) {
+                                            if (amountToSell <= totalHeld) {
+                                                val stockResponse = getStockPrice(stockSymbol)
+                                                val price = stockResponse.globalQuote.price.toDoubleOrNull()
+
+                                                if (price != null) {
+                                                    existingEntry?.heldAmount = existingEntry?.heldAmount?.minus(
+                                                        amountToSell
+                                                    )!! // Decrease the held amount
+                                                    portfolio.add(
+                                                        PortfolioEntry(
+                                                            type = "Sold",
+                                                            symbol = stockSymbol,
+                                                            price = price.toString(),
+                                                            amount = amount,
+                                                            heldAmount = totalHeld - amountToSell // Update held amount
+                                                        )
+                                                    )
+                                                    message = "Sold $stockSymbol at $$price"
+                                                    savePortfolio(localUserName, portfolio) // Save portfolio
+                                                } else {
+                                                    message = "Failed to fetch stock price."
+                                                }
+                                            } else {
+                                                message = "You do not own enough $stockSymbol shares to sell."
+                                            }
+                                        } else {
+                                            message = "You do not own any $stockSymbol shares to sell."
+                                        }
+                                    } else {
+                                        message = "Please enter a valid amount."
+                                    }
                                 } else {
-                                    message = "Please enter a valid symbol and amount"
+                                    message = "Please enter a valid symbol and amount."
                                 }
                             }
                         }) {
@@ -556,31 +636,22 @@ fun StockTradingWindow() {
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Portfolio Table Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.DarkGray)
-                            .padding(8.dp)
-                    ) {
-                        Text("Type", modifier = Modifier.weight(1f), color = Color.White)
-                        Text("Symbol", modifier = Modifier.weight(1f), color = Color.White)
-                        Text("Price", modifier = Modifier.weight(1f), color = Color.White)
-                        Text("Amount", modifier = Modifier.weight(1f), color = Color.White)
-                    }
-
-                    // Portfolio Table Content
-                    LazyColumn {
-                        items(portfolio) { entry ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp)
-                            ) {
-                                Text(entry["Type"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
-                                Text(entry["Symbol"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
-                                Text(entry["Price"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
-                                Text(entry["Amount"] ?: "", modifier = Modifier.weight(1f), color = Color.LightGray)
+                    if (portfolio.isEmpty()) {
+                        Text("No stocks in portfolio", color = Color.White)
+                    } else {
+                        LazyColumn {
+                            items(portfolio) { entry ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp)
+                                ) {
+                                    Text(entry.type, modifier = Modifier.weight(1f), color = Color.LightGray)
+                                    Text(entry.symbol, modifier = Modifier.weight(1f), color = Color.LightGray)
+                                    Text(entry.price, modifier = Modifier.weight(1f), color = Color.LightGray)
+                                    Text(entry.amount, modifier = Modifier.weight(1f), color = Color.LightGray)
+                                    Text(entry.heldAmount.toString(), modifier = Modifier.weight(1f), color = Color.LightGray)
+                                }
                             }
                         }
                     }
