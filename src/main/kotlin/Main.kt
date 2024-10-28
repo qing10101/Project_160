@@ -5,6 +5,7 @@ import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.*
 import androidx.compose.runtime.*
@@ -494,6 +495,7 @@ fun StockTradingWindow() {
     var amount by remember { mutableStateOf("") }
     val panelBackgroundImage: Painter = painterResource("stock.png")
     val coroutineScope = rememberCoroutineScope()
+    var portfolioVersion by remember { mutableStateOf(0) } // Track changes
 
     MaterialTheme {
         Surface(
@@ -572,11 +574,18 @@ fun StockTradingWindow() {
                                             val existingEntry = portfolio.find { it.symbol == stockSymbol }
 
                                             if (existingEntry != null) {
-                                                // Create a new instance of PortfolioEntry with the updated held amount
-                                                val updatedEntry = existingEntry.copy(heldAmount = existingEntry.heldAmount + amountToBuy)
+                                                // Update portfolio and create a new list
+                                                val updatedPortfolio = portfolio.mapNotNull {
+                                                    if (it.symbol == stockSymbol) {
+                                                        val updatedAmount = it.heldAmount + amountToBuy
+                                                        if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
+                                                    } else it
+                                                }
 
-                                                // Update the portfolio with the new entry
-                                                portfolio[portfolio.indexOf(existingEntry)] = updatedEntry
+                                                // Trigger recomposition by updating the entire list
+                                                portfolio = updatedPortfolio.toMutableList()
+                                                // Save updated portfolio to JSON
+                                                savePortfolio(localUserName, portfolio.toList())
                                             } else {
                                                 portfolio.add(
                                                     PortfolioEntry(
@@ -587,6 +596,7 @@ fun StockTradingWindow() {
                                                     )
                                                 )
                                             }
+                                            portfolioVersion ++
                                             message = "Bought $stockSymbol at $$price"
                                             savePortfolio(localUserName, portfolio)
                                         } else {
@@ -618,16 +628,16 @@ fun StockTradingWindow() {
                                             val price = stockResponse?.globalQuote?.price?.toDoubleOrNull()
                                             println("get price: $price")
                                             if (price != null) {
-                                                // Update held amount by creating a new list without this symbol if heldAmount becomes 0
+                                                // Update portfolio and create a new list
                                                 val updatedPortfolio = portfolio.mapNotNull {
                                                     if (it.symbol == stockSymbol) {
                                                         val updatedAmount = it.heldAmount - amountToSell
                                                         if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
                                                     } else it
                                                 }
-                                                portfolio.clear()
-                                                portfolio.addAll(updatedPortfolio)
 
+                                                // Trigger recomposition by updating the entire list
+                                                portfolio = updatedPortfolio.toMutableList()
                                                 // Save updated portfolio to JSON
                                                 savePortfolio(localUserName, portfolio.toList())
                                                 message = "Sold $stockSymbol at $$price"
@@ -658,7 +668,7 @@ fun StockTradingWindow() {
                     if (portfolio.isEmpty()) {
                         Text("No stocks in portfolio", color = Color.White)
                     } else {
-                        LazyColumn {
+                        LazyColumn(userScrollEnabled = true) {
                             items(portfolio) { entry ->
                                 Row(
                                     modifier = Modifier
