@@ -40,7 +40,6 @@ data class PortfolioEntry(
     val type: String,
     val symbol: String,
     val price: String,
-    val amount: String,
     var heldAmount: Double  // Amount of stock currently held
 )
 
@@ -66,7 +65,7 @@ fun savePortfolio(username: String, portfolio: List<PortfolioEntry>) {
 }
 @Serializable
 data class StockPriceResponse(
-    @SerialName("Global Quote") val globalQuote: GlobalQuote
+    @SerialName("Global Quote") val globalQuote: GlobalQuote? // Make this nullable
 )
 
 @Serializable
@@ -82,6 +81,7 @@ data class GlobalQuote(
     @SerialName("09. change") val change: String,
     @SerialName("10. change percent") val changePercent: String
 )
+
 object ApiClient {
     val client = HttpClient {
         install(ContentNegotiation) {
@@ -89,9 +89,16 @@ object ApiClient {
         }
     }
 
-    suspend fun getStockPrice(symbol: String): StockPriceResponse {
-        var url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=$symbol&apikey=SMIXPOR20XFULGKL"
-        return client.get(url).body()
+    suspend fun getStockPrice(symbol: String): StockPriceResponse? {
+        val url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=$symbol&apikey=SMIXPOR20XFULGKL"
+        return try {
+            val response: String = client.get(url).body() // Get raw response as a String
+            println("Raw API response: $response") // Log the response for debugging
+            Json.decodeFromString<StockPriceResponse>(response) // Deserialize the response
+        } catch (e: Exception) {
+            println("Error fetching stock price: ${e.message}") // Log error message
+            null // Return null if an error occurs
+        }
     }
 }
 
@@ -105,7 +112,14 @@ fun deleteUser(username: String): Boolean {
         val statement = connection?.prepareStatement(query)
         statement?.setString(1, username)
         val rowsAffected = statement?.executeUpdate()
-
+        if (rowsAffected != null && rowsAffected > 0) {
+            // Only delete the portfolio file if the user was deleted from the database
+            val portfolioFile = File("portfolio_$username.json")
+            if (portfolioFile.exists()) {
+                portfolioFile.delete()
+                println("Portfolio file for user $username deleted.")
+            }
+        }
         connection?.commit()  // Commit the transaction
         statement?.close()
         rowsAffected!! > 0  // Return true if the user was deleted
@@ -123,6 +137,15 @@ fun deleteUsersTable() {
     connection?.autoCommit = false  // Start transaction
 
     try {
+        // Delete all portfolio files with prefix "portfolio_"
+        val portfolioFiles = File(".").listFiles { file -> file.name.startsWith("portfolio_") && file.name.endsWith(".json") }
+        portfolioFiles?.forEach { file ->
+            if (file.delete()) {
+                println("Deleted portfolio file: ${file.name}")
+            } else {
+                println("Failed to delete portfolio file: ${file.name}")
+            }
+        }
         val query = "DROP TABLE IF EXISTS users"
         val statement = connection?.createStatement()
         statement?.executeUpdate(query)
@@ -539,32 +562,33 @@ fun StockTradingWindow() {
                         Button(onClick = {
                             coroutineScope.launch {
                                 if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
+                                    println("get amount")
                                     val stockResponse = getStockPrice(stockSymbol)
-                                    val price = stockResponse.globalQuote.price.toDoubleOrNull()
+                                    val price = stockResponse?.globalQuote?.price?.toDoubleOrNull()
 
                                     if (price != null) {
                                         val amountToBuy = amount.toDoubleOrNull()
                                         if (amountToBuy != null) {
-                                            // Check if the stock already exists in the portfolio
                                             val existingEntry = portfolio.find { it.symbol == stockSymbol }
 
                                             if (existingEntry != null) {
-                                                // Increase the held amount for the existing stock
-                                                existingEntry.heldAmount += amountToBuy
+                                                // Create a new instance of PortfolioEntry with the updated held amount
+                                                val updatedEntry = existingEntry.copy(heldAmount = existingEntry.heldAmount + amountToBuy)
+
+                                                // Update the portfolio with the new entry
+                                                portfolio[portfolio.indexOf(existingEntry)] = updatedEntry
                                             } else {
-                                                // Create a new entry in the portfolio
                                                 portfolio.add(
                                                     PortfolioEntry(
-                                                        type = "Bought",
+                                                        type = "Holding",
                                                         symbol = stockSymbol,
                                                         price = price.toString(),
-                                                        amount = amount,
-                                                        heldAmount = amountToBuy // Set initial held amount
+                                                        heldAmount = amountToBuy
                                                     )
                                                 )
                                             }
                                             message = "Bought $stockSymbol at $$price"
-                                            savePortfolio(localUserName, portfolio) // Save portfolio
+                                            savePortfolio(localUserName, portfolio)
                                         } else {
                                             message = "Please enter a valid amount."
                                         }
@@ -588,35 +612,30 @@ fun StockTradingWindow() {
                                     if (amountToSell != null) {
                                         val existingEntry = portfolio.find { it.symbol == stockSymbol }
                                         val totalHeld = existingEntry?.heldAmount ?: 0.0
-
-                                        if (totalHeld > 0) {
-                                            if (amountToSell <= totalHeld) {
-                                                val stockResponse = getStockPrice(stockSymbol)
-                                                val price = stockResponse.globalQuote.price.toDoubleOrNull()
-
-                                                if (price != null) {
-                                                    existingEntry?.heldAmount = existingEntry?.heldAmount?.minus(
-                                                        amountToSell
-                                                    )!! // Decrease the held amount
-                                                    portfolio.add(
-                                                        PortfolioEntry(
-                                                            type = "Sold",
-                                                            symbol = stockSymbol,
-                                                            price = price.toString(),
-                                                            amount = amount,
-                                                            heldAmount = totalHeld - amountToSell // Update held amount
-                                                        )
-                                                    )
-                                                    message = "Sold $stockSymbol at $$price"
-                                                    savePortfolio(localUserName, portfolio) // Save portfolio
-                                                } else {
-                                                    message = "Failed to fetch stock price."
+                                        println("Held: $totalHeld")
+                                        if (totalHeld > 0 && amountToSell <= totalHeld) {
+                                            val stockResponse = getStockPrice(stockSymbol)
+                                            val price = stockResponse?.globalQuote?.price?.toDoubleOrNull()
+                                            println("get price: $price")
+                                            if (price != null) {
+                                                // Update held amount by creating a new list without this symbol if heldAmount becomes 0
+                                                val updatedPortfolio = portfolio.mapNotNull {
+                                                    if (it.symbol == stockSymbol) {
+                                                        val updatedAmount = it.heldAmount - amountToSell
+                                                        if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
+                                                    } else it
                                                 }
+                                                portfolio.clear()
+                                                portfolio.addAll(updatedPortfolio)
+
+                                                // Save updated portfolio to JSON
+                                                savePortfolio(localUserName, portfolio.toList())
+                                                message = "Sold $stockSymbol at $$price"
                                             } else {
-                                                message = "You do not own enough $stockSymbol shares to sell."
+                                                message = "Failed to fetch stock price."
                                             }
                                         } else {
-                                            message = "You do not own any $stockSymbol shares to sell."
+                                            message = "Insufficient $stockSymbol shares to sell."
                                         }
                                     } else {
                                         message = "Please enter a valid amount."
@@ -649,7 +668,6 @@ fun StockTradingWindow() {
                                     Text(entry.type, modifier = Modifier.weight(1f), color = Color.LightGray)
                                     Text(entry.symbol, modifier = Modifier.weight(1f), color = Color.LightGray)
                                     Text(entry.price, modifier = Modifier.weight(1f), color = Color.LightGray)
-                                    Text(entry.amount, modifier = Modifier.weight(1f), color = Color.LightGray)
                                     Text(entry.heldAmount.toString(), modifier = Modifier.weight(1f), color = Color.LightGray)
                                 }
                             }
