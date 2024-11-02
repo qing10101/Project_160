@@ -36,6 +36,7 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 private var localUserName = "user"
+private var localBalance by mutableStateOf(0.0)
 @Serializable
 data class PortfolioEntry(
     val type: String,
@@ -47,20 +48,23 @@ data class PortfolioEntry(
 @Serializable
 data class UserPortfolio(
     val username: String,
+    val balance: Double,
     val entries: List<PortfolioEntry>
 )
 fun loadPortfolio(username: String): MutableList<PortfolioEntry> {
     val portfolioFile = File("portfolio_$username.json") // Use a unique filename for each user
     return if (portfolioFile.exists()) {
         val jsonString = portfolioFile.readText()
+        localBalance = Json.decodeFromString<UserPortfolio>(jsonString).balance
         Json.decodeFromString<UserPortfolio>(jsonString).entries.toMutableList()
     } else {
+        localBalance = 10000.0
         mutableListOf()
     }
 }
 fun savePortfolio(username: String, portfolio: List<PortfolioEntry>) {
     val portfolioFile = File("portfolio_$username.json") // Correctly use string interpolation
-    val userPortfolio = UserPortfolio(username, portfolio)
+    val userPortfolio = UserPortfolio(username, localBalance, portfolio)
     val jsonString = Json.encodeToString(userPortfolio)
     portfolioFile.writeText(jsonString) // Save the updated portfolio to the file
 }
@@ -510,6 +514,8 @@ fun StockTradingWindow() {
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
+
+                Text(text = "Balance: ${localBalance}" , color = Color.White, modifier = Modifier.align(Alignment.TopStart).padding(32.dp))
                 // Log Out button at the top right
                 Button(
                     onClick = { exitProcess(0) },
@@ -570,35 +576,41 @@ fun StockTradingWindow() {
 
                                     if (price != null) {
                                         val amountToBuy = amount.toDoubleOrNull()
-                                        if (amountToBuy != null) {
-                                            val existingEntry = portfolio.find { it.symbol == stockSymbol }
+                                        if (amountToBuy != null && amountToBuy > 0) {
+                                            if(amountToBuy < localBalance)
+                                            {
+                                                val existingEntry = portfolio.find { it.symbol == stockSymbol }
 
-                                            if (existingEntry != null) {
-                                                // Update portfolio and create a new list
-                                                val updatedPortfolio = portfolio.mapNotNull {
-                                                    if (it.symbol == stockSymbol) {
-                                                        val updatedAmount = it.heldAmount + amountToBuy
-                                                        if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
-                                                    } else it
-                                                }
+                                                if (existingEntry != null) {
+                                                    // Update portfolio and create a new list
+                                                    val updatedPortfolio = portfolio.mapNotNull {
+                                                        if (it.symbol == stockSymbol) {
+                                                            val updatedAmount = it.heldAmount + amountToBuy
+                                                            if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
+                                                        } else it
+                                                    }
 
-                                                // Trigger recomposition by updating the entire list
-                                                portfolio = updatedPortfolio.toMutableList()
-                                                // Save updated portfolio to JSON
-                                                savePortfolio(localUserName, portfolio.toList())
-                                            } else {
-                                                portfolio.add(
-                                                    PortfolioEntry(
-                                                        type = "Holding",
-                                                        symbol = stockSymbol,
-                                                        price = price.toString(),
-                                                        heldAmount = amountToBuy
+                                                    // Trigger recomposition by updating the entire list
+                                                    portfolio = updatedPortfolio.toMutableList()
+                                                    // Save updated portfolio to JSON
+                                                    savePortfolio(localUserName, portfolio.toList())
+                                                } else {
+                                                    portfolio.add(
+                                                        PortfolioEntry(
+                                                            type = "Holding",
+                                                            symbol = stockSymbol,
+                                                            price = price.toString(),
+                                                            heldAmount = amountToBuy
+                                                        )
                                                     )
-                                                )
+                                                }
+                                                localBalance -= amountToBuy
+                                                portfolioVersion ++
+                                                message = "Bought $stockSymbol at $$price"
+                                                savePortfolio(localUserName, portfolio)
+                                            } else {
+                                                message = "Insufficient funds."
                                             }
-                                            portfolioVersion ++
-                                            message = "Bought $stockSymbol at $$price"
-                                            savePortfolio(localUserName, portfolio)
                                         } else {
                                             message = "Please enter a valid amount."
                                         }
@@ -619,7 +631,7 @@ fun StockTradingWindow() {
                             coroutineScope.launch {
                                 if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
                                     val amountToSell = amount.toDoubleOrNull()
-                                    if (amountToSell != null) {
+                                    if (amountToSell != null && amountToSell > 0) {
                                         val existingEntry = portfolio.find { it.symbol == stockSymbol }
                                         val totalHeld = existingEntry?.heldAmount ?: 0.0
                                         println("Held: $totalHeld")
@@ -636,6 +648,7 @@ fun StockTradingWindow() {
                                                     } else it
                                                 }
 
+                                                localBalance += amountToSell
                                                 // Trigger recomposition by updating the entire list
                                                 portfolio = updatedPortfolio.toMutableList()
                                                 // Save updated portfolio to JSON
