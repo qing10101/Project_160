@@ -34,6 +34,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.Calendar
 
 private var localUserName = "user"
 private var localBalance by mutableStateOf(0.0)
@@ -335,14 +336,20 @@ fun RegisterUserWindow(onUserCreated: () -> Unit) {
                     if (connection != null) {
                         if (password == confirmPassword) {
                             if (username.isNotEmpty() && password.isNotEmpty()) {
-                                val userCreated = insertUser(connection, username, password)
-                                if(!userCreated) {
-                                    message = "Username already taken."
-                                }else
+                                if (username.length < 8 && password.length > 3)
                                 {
-                                    message = "User created successfully!"
-                                    connection.close()
-                                    onUserCreated()  // Navigate back to login
+                                    val userCreated = insertUser(connection, username, password)
+                                    if(!userCreated) {
+                                        message = "Username already taken."
+                                    } else {
+                                        message = "User created successfully!"
+                                        connection.close()
+                                        onUserCreated()  // Navigate back to login
+                                    }
+                                } else if (username.length >= 8){
+                                    message = "Username too long."
+                                } else {
+                                    message = "Password too short."
                                 }
                             } else {
                                 message = "Please fill out all fields."
@@ -533,7 +540,18 @@ fun StockTradingWindow() {
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Stock Trading Simulator", color = Color.White, style = MaterialTheme.typography.h5)
+                    val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                    var greeting = ""
+                    if (hourOfDay in 6..11) {
+                        greeting = "Good Morning"
+                    } else if (hourOfDay in 12..17) {
+                        greeting = "Good Afternoon"
+                    } else if (hourOfDay in 18..23){
+                        greeting = "Good Evening"
+                    } else {
+                        greeting = "Good Night"
+                    }
+                    Text("${greeting}, ${localUserName}!", color = Color.White, style = MaterialTheme.typography.h5)
 
                     Spacer(Modifier.height(16.dp))
 
