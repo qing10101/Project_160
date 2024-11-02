@@ -888,6 +888,7 @@ fun main() = application {
         position = WindowPosition((screenWidth - windowWidth) / 2, (screenHeight - windowHeight) / 2),
         placement = WindowPlacement.Floating
     )
+    // Set the main window with the App composable function
     Window(state = windowState,
         onCloseRequest = ::exitApplication,
         title = "Stock Trading Simulator" // Set your desired window title here
