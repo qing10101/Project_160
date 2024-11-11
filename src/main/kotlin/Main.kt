@@ -97,8 +97,13 @@ object ApiClient {
 
     suspend fun getStockPrice(symbol: String): StockPriceResponse? {
         val url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=$symbol&apikey=SMIXPOR20XFULGKL"
+        val url_backup = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=$symbol&apikey=227E1D43683RI0TC"
         return try {
-            val response: String = client.get(url).body() // Get raw response as a String
+            val response: String = try{
+                client.get(url).body() // Get raw response as a String
+            } catch (e: Exception){
+                client.get(url_backup).body() // Get raw response as a String
+            }
             println("Raw API response: $response") // Log the response for debugging
             Json.decodeFromString<StockPriceResponse>(response) // Deserialize the response
         } catch (e: Exception) {
