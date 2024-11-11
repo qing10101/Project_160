@@ -482,7 +482,7 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminL
                     // Create new account button
                     Button(onClick = { onCreateAccount()
                         connection?.close() // Close database connection when navigating away from the create account window
-                                     }, modifier = Modifier.fillMaxWidth()) {
+                    }, modifier = Modifier.fillMaxWidth()) {
                         Text("Create New Account")
                     }
 
@@ -498,15 +498,23 @@ fun LoginPanel(onLoginSuccess: () -> Unit, onCreateAccount: () -> Unit, onAdminL
     }
 }
 
+
+
 @Composable
 fun StockTradingWindow() {
     var stockSymbol by remember { mutableStateOf("") }
-    var portfolio by remember { mutableStateOf(mutableListOf<PortfolioEntry>().apply { addAll(loadPortfolio(localUserName)) }) }
+    val panelBackgroundImage: Painter = painterResource("stock.png")
+
+    // Change 1: Use `mutableStateOf` for `portfolio` so that UI recomposes on updates
+    var portfolio by remember { mutableStateOf(loadPortfolio(localUserName)) }
+
     var message by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
-    val panelBackgroundImage: Painter = painterResource("stock.png")
+
+    // Change 2: Use `mutableStateOf` for `localBalance` so that UI recomposes when balance changes
+//    var localBalance by remember { mutableStateOf(10000.0) }
+
     val coroutineScope = rememberCoroutineScope()
-    var portfolioVersion by remember { mutableStateOf(0) } // Track changes
 
     MaterialTheme {
         Surface(
@@ -521,40 +529,26 @@ fun StockTradingWindow() {
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
+                // Display Balance
+                Text(text = "Balance: $$localBalance", color = Color.White, modifier = Modifier.align(Alignment.TopStart).padding(32.dp))
 
-                Text(text = "Balance: ${localBalance}" , color = Color.White, modifier = Modifier.align(Alignment.TopStart).padding(32.dp))
-                // Log Out button at the top right
+                // Log Out Button
                 Button(
                     onClick = { exitProcess(0) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                 ) {
                     Text("Log Out")
                 }
 
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                    var greeting = ""
-                    if (hourOfDay in 6..11) {
-                        greeting = "Good Morning"
-                    } else if (hourOfDay in 12..17) {
-                        greeting = "Good Afternoon"
-                    } else if (hourOfDay in 18..23){
-                        greeting = "Good Evening"
-                    } else {
-                        greeting = "Good Night"
-                    }
-                    Text("${greeting}, ${localUserName}!", color = Color.White, style = MaterialTheme.typography.h5)
-
+                    Text("Hello, $localUserName!", color = Color.White, style = MaterialTheme.typography.h5)
                     Spacer(Modifier.height(16.dp))
 
+                    // Stock Symbol Input
                     OutlinedTextField(
                         value = stockSymbol,
                         onValueChange = { stockSymbol = it },
@@ -562,11 +556,10 @@ fun StockTradingWindow() {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color(150, 0, 255),
+                            unfocusedBorderColor = Color.Gray,
                             cursorColor = Color.White
                         )
                     )
-
                     Spacer(Modifier.height(16.dp))
 
                     // Amount Input
@@ -577,66 +570,44 @@ fun StockTradingWindow() {
                         textStyle = TextStyle(color = Color.White),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
                             focusedBorderColor = Color.White,
-                            unfocusedBorderColor = Color(150, 0, 255),
+                            unfocusedBorderColor = Color.Gray,
                             cursorColor = Color.White
                         )
                     )
-
                     Spacer(Modifier.height(16.dp))
 
                     Row {
+                        // Buy Button
                         Button(onClick = {
                             coroutineScope.launch {
-                                if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
-                                    println("get amount")
+                                val amountToBuy = amount.toDoubleOrNull()?.takeIf { it > 0 }
+                                if (amountToBuy != null && amountToBuy <= localBalance) {
                                     val stockResponse = getStockPrice(stockSymbol)
                                     val price = stockResponse?.globalQuote?.price?.toDoubleOrNull()
 
                                     if (price != null) {
-                                        val amountToBuy = amount.toDoubleOrNull()
-                                        if (amountToBuy != null && amountToBuy > 0) {
-                                            if(amountToBuy < localBalance)
-                                            {
-                                                val existingEntry = portfolio.find { it.symbol == stockSymbol }
-
-                                                if (existingEntry != null) {
-                                                    // Update portfolio and create a new list
-                                                    val updatedPortfolio = portfolio.mapNotNull {
-                                                        if (it.symbol == stockSymbol) {
-                                                            val updatedAmount = it.heldAmount + amountToBuy
-                                                            if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
-                                                        } else it
-                                                    }
-
-                                                    // Trigger recomposition by updating the entire list
-                                                    portfolio = updatedPortfolio.toMutableList()
-                                                    // Save updated portfolio to JSON
-                                                    savePortfolio(localUserName, portfolio.toList())
-                                                } else {
-                                                    portfolio.add(
-                                                        PortfolioEntry(
-                                                            type = "Holding",
-                                                            symbol = stockSymbol,
-                                                            price = price.toString(),
-                                                            heldAmount = amountToBuy
-                                                        )
-                                                    )
-                                                }
-                                                localBalance -= amountToBuy
-                                                portfolioVersion ++
-                                                message = "Bought $stockSymbol at $$price"
-                                                savePortfolio(localUserName, portfolio)
-                                            } else {
-                                                message = "Insufficient funds."
-                                            }
+                                        val existingEntry = portfolio.find { it.symbol == stockSymbol }
+                                        if (existingEntry != null) {
+                                            // Update existing stock holding amount
+                                            // Change 3: Reassign `portfolio` to trigger recomposition
+                                            portfolio = portfolio.map {
+                                                if (it.symbol == stockSymbol) it.copy(heldAmount = it.heldAmount + amountToBuy)
+                                                else it
+                                            }.toMutableList()
                                         } else {
-                                            message = "Please enter a valid amount."
+                                            // Add new stock if not already in portfolio
+                                            portfolio.add(
+                                                PortfolioEntry("Holding", stockSymbol, price.toString(), amountToBuy)
+                                            )
                                         }
+                                        localBalance -= amountToBuy // Update balance
+                                        message = "Bought $stockSymbol at $$price"
+                                        savePortfolio(localUserName, portfolio)
                                     } else {
                                         message = "Failed to fetch stock price."
                                     }
                                 } else {
-                                    message = "Please enter a valid symbol and amount"
+                                    message = "Invalid amount or insufficient funds."
                                 }
                             }
                         }) {
@@ -645,44 +616,36 @@ fun StockTradingWindow() {
 
                         Spacer(Modifier.width(16.dp))
 
+                        // Sell Button
                         Button(onClick = {
                             coroutineScope.launch {
-                                if (stockSymbol.isNotEmpty() && amount.isNotEmpty()) {
-                                    val amountToSell = amount.toDoubleOrNull()
-                                    if (amountToSell != null && amountToSell > 0) {
-                                        val existingEntry = portfolio.find { it.symbol == stockSymbol }
-                                        val totalHeld = existingEntry?.heldAmount ?: 0.0
-                                        println("Held: $totalHeld")
-                                        if (totalHeld > 0 && amountToSell <= totalHeld) {
-                                            val stockResponse = getStockPrice(stockSymbol)
-                                            val price = stockResponse?.globalQuote?.price?.toDoubleOrNull()
-                                            println("get price: $price")
-                                            if (price != null) {
-                                                // Update portfolio and create a new list
-                                                val updatedPortfolio = portfolio.mapNotNull {
-                                                    if (it.symbol == stockSymbol) {
-                                                        val updatedAmount = it.heldAmount - amountToSell
-                                                        if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
-                                                    } else it
-                                                }
+                                val amountToSell = amount.toDoubleOrNull()?.takeIf { it > 0 }
+                                if (amountToSell != null) {
+                                    val existingEntry = portfolio.find { it.symbol == stockSymbol }
+                                    if (existingEntry != null && existingEntry.heldAmount >= amountToSell) {
+                                        val stockResponse = getStockPrice(stockSymbol)
+                                        val price = stockResponse?.globalQuote?.price?.toDoubleOrNull()
+                                        if (price != null) {
+                                            // Update portfolio after selling
+                                            // Change 4: Reassign `portfolio` to trigger recomposition
+                                            portfolio = portfolio.mapNotNull {
+                                                if (it.symbol == stockSymbol) {
+                                                    val updatedAmount = it.heldAmount - amountToSell
+                                                    if (updatedAmount > 0) it.copy(heldAmount = updatedAmount) else null
+                                                } else it
+                                            }.toMutableList()
 
-                                                localBalance += amountToSell
-                                                // Trigger recomposition by updating the entire list
-                                                portfolio = updatedPortfolio.toMutableList()
-                                                // Save updated portfolio to JSON
-                                                savePortfolio(localUserName, portfolio.toList())
-                                                message = "Sold $stockSymbol at $$price"
-                                            } else {
-                                                message = "Failed to fetch stock price."
-                                            }
+                                            localBalance += amountToSell // Update balance
+                                            message = "Sold $stockSymbol at $$price"
+                                            savePortfolio(localUserName, portfolio)
                                         } else {
-                                            message = "Insufficient $stockSymbol shares to sell."
+                                            message = "Failed to fetch stock price."
                                         }
                                     } else {
-                                        message = "Please enter a valid amount."
+                                        message = "Insufficient $stockSymbol shares to sell."
                                     }
                                 } else {
-                                    message = "Please enter a valid symbol and amount."
+                                    message = "Invalid amount entered."
                                 }
                             }
                         }) {
@@ -691,7 +654,6 @@ fun StockTradingWindow() {
                     }
 
                     Spacer(Modifier.height(16.dp))
-
                     Text(message, color = Color.White)
 
                     Spacer(Modifier.height(16.dp))
@@ -699,12 +661,10 @@ fun StockTradingWindow() {
                     if (portfolio.isEmpty()) {
                         Text("No stocks in portfolio", color = Color.White)
                     } else {
-                        LazyColumn(userScrollEnabled = true) {
+                        LazyColumn {
                             items(portfolio) { entry ->
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp)
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp)
                                 ) {
                                     Text(entry.type, modifier = Modifier.weight(1f), color = Color.LightGray)
                                     Text(entry.symbol, modifier = Modifier.weight(1f), color = Color.LightGray)
@@ -827,9 +787,9 @@ fun App() {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     Crossfade(targetState = screenState,
-            animationSpec = tween(durationMillis = 2000,
-                easing = FastOutSlowInEasing  // Fast start, slow finish
-            )  // Set the duration in milliseconds (e.g., 2000ms = 2 seconds)
+        animationSpec = tween(durationMillis = 2000,
+            easing = FastOutSlowInEasing  // Fast start, slow finish
+        )  // Set the duration in milliseconds (e.g., 2000ms = 2 seconds)
     ) { state ->
         when (state) {
             ScreenState.Login -> LoginPanel(
